@@ -63,7 +63,7 @@ def nonMaxSup(lBoxes,tresh):
                 lBoxes.pop(j)
                 if j in fringe:
                     fringe.remove(j)
-                fringe.insert(0,i)
+                fringe.append(i)
                 #print "dsadas",i,j,lBoxes.keys()
     #print(len(lBoxes.keys()))
     return lBoxes
@@ -92,6 +92,22 @@ def calc_desc(img,desc):
     kp = fast.detect(img[y-10:y+h+10,x-10:x+w+10], None)
     return len(kp)
 
+def getposition(box):
+    pos=""
+    x,y,w,h  = box
+    xc=x+w/2
+    yc=y+h/2
+    if yc-240<-80:
+        pos+="T"
+    if yc-240>80:
+        pos+="B"
+    if xc-320<-107:
+        pos+="L"
+    if xc-320>107:
+        pos+="R"
+    if pos=="":
+        pos="C"
+    return pos
 
 cap = cv2.VideoCapture(1)
 ret,frame = cap.read()
@@ -154,10 +170,12 @@ while(True):
         if not isValidBox(boxes[i]):
             boxes.pop(i)
 
-    boxes = nonMaxSup(boxes,5)
+    boxes = nonMaxSup(boxes,3)
     for i in boxes.keys():
         x,y,w,h = boxes[i]
+        pos = getposition(boxes[i])
         cv2.rectangle(frame,(x,y),(x+w,y+h),(0,255,0),2)
+        cv2.putText(frame,pos,(x+w/2,y+h/2),cv2.FONT_HERSHEY_PLAIN,4,(255,255,255))
         #else:
         #    if calc_desc(frame,(x,y,w,h))>10:
         #        cv2.rectangle(frame,(x,y),(x+w,y+h),(255,0,0),2)
@@ -166,7 +184,7 @@ while(True):
         #cv2.drawContours(frame, [cnt], -1, (0,255,0), 1)
     #cv2.drawContours(frame, test_cont, -1, (0,255,0), 1)
     
-    frame = cv2.drawKeypoints(frame, kp, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+    #frame = cv2.drawKeypoints(frame, kp, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
     cv2.imshow('res2',frame)
     '''
     # find and draw the keypoints
