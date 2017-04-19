@@ -92,7 +92,7 @@ def nonMaxSup(lBoxes,tresh):
 def isValidBox(box):
     x,y,w,h = box
     if ((h>70 and h<150) or (w>70 and w<150)):
-        if calc_desc(frame,(x,y,w,h))>200:
+        if calc_desc(frame,(x,y,w,h))>150:
             return True;
     return False;
 
@@ -211,8 +211,8 @@ while(True):
     Kvalues = np.array(Kvalues)
     #keypoints = detector.detect(frameRight)
     # define criteria, number of clusters(K) and apply kmeans()
-    criteria = (cv2.TERM_CRITERIA_MAX_ITER, 6, 1.0)
-    K = 5
+    criteria = (cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+    K = 3
     ret,label,center=cv2.kmeans(Kvalues,K,criteria,10,cv2.KMEANS_PP_CENTERS)
     # Now convert back into uint8, and make original image
     center = np.uint8(center)
