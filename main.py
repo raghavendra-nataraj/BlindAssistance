@@ -3,14 +3,34 @@ import random
 import cv2
 from numpy import inf
 
+def calc_desc(img,desc):
+    x,y,w,h  = desc
+    buffer = 0
+    kp = fast.detect(img[y-buffer:y+h+buffer,x-buffer:x+w+buffer], None)
+    return len(kp)
+
+
+def mergeRect(rect1,rect2):
+    bx,by,bw,bh = rect2
+    x,y,w,h = rect1
+    bx1=bx+bw
+    by1=by+bh
+    x1=x+w
+    y1=y+h
+    nx=0;ny=0;nx1=0;ny1=0;
+    nx = x if x<bx else bx
+    ny = y if y<by else by
+    nx1 = x1 if x1>bx1  else bx1
+    ny1 = y1 if y1>by1  else by1
+    return (nx,ny,(nx1-nx),(ny1-ny))
+
 def nonMaxSup(lBoxes,tresh):
     w = frame.shape[1]
     h = frame.shape[0]
-    #print(len(lBoxes.keys())),
+    print(lBoxes.keys())
     tmpImg = np.array(np.random.rand(h,w),np.int32)
     tmpImg.fill(0)
-    #print
-    #print
+    
     for i in lBoxes.keys():
         x,y,w,h = lBoxes[i];
         tmpImg[y:y+h,x:x+w] = i
@@ -25,56 +45,54 @@ def nonMaxSup(lBoxes,tresh):
             cy = (y+y1)/2
             noConf = True
             j=0;
-            if (noConf and y1+tresh<h and tmpImg[y1+tresh,cx]!=0):
+            if (noConf and y1+tresh<h and set(tmpImg[y1:y1+tresh,cx].flatten())!=set([0])):
                 noConf = False
-                j=tmpImg[y1+tresh,cx]
-            if (noConf and y-tresh>0 and tmpImg[y-tresh,cx]!=0):
+                confZone=set(tmpImg[y1:y1+tresh,cx].flatten())
+            if (noConf and y-tresh>0 and set(tmpImg[y-tresh:y,cx].flatten())!=set([0])):
                 noConf = False
-                j=tmpImg[y-tresh,cx]
-            if (noConf and x-tresh>0 and tmpImg[cy,x-tresh]!=0):
+                confZone=set(tmpImg[y-tresh:y,cx].flatten())
+            if (noConf and x-tresh>0 and set(tmpImg[cy,x-tresh:x].flatten())!=set([0])):
                 noConf = False
-                j=tmpImg[cy,x-tresh]
-            if (noConf and x1+tresh<w and tmpImg[cy,x1+tresh]!=0):
+                confZone=set(tmpImg[cy,x-tresh:x].flatten())
+            if (noConf and x1+tresh<w and set(tmpImg[cy,x1:x1+tresh].flatten())!=set([0])):
                 noConf = False
-                j=tmpImg[cy,x1+tresh]
-            if (noConf and y1+tresh<h and x1+tresh<w and tmpImg[y1+tresh,x1+tresh]!=0):
+                confZone=set(tmpImg[cy,x1:x1+tresh].flatten())
+            if (noConf and y1+tresh<h and x1+tresh<w and set(tmpImg[y1:y1+tresh,x1:x1+tresh].flatten())!=set([0])):
                 noConf = False
-                j=tmpImg[y1+tresh,x1+tresh]
-            if (noConf and y-tresh>0 and x-tresh>0 and tmpImg[y-tresh,x-tresh]!=0):
+                confZone=set(tmpImg[y1:y1+tresh,x1:x1+tresh].flatten())
+            if (noConf and y-tresh>0 and x-tresh>0 and set(tmpImg[y-tresh:y,x-tresh:x].flatten())!=set([0])):
                 noConf = False
-                j=tmpImg[y-tresh,x-tresh]
-            if (noConf and y1+tresh<h and x-tresh>0 and tmpImg[y1+tresh,x-tresh]!=0):
+                confZone=set(tmpImg[y-tresh:y,x-tresh:x].flatten())
+            if (noConf and y1+tresh<h and x-tresh>0 and set(tmpImg[y1:y1+tresh,x-tresh:x].flatten())!=set([0])):
                 noConf = False
-                j=tmpImg[y1+tresh,x-tresh]
-            if (noConf and y-tresh>0 and x1+tresh<w and tmpImg[y-tresh,x1+tresh]!=0):
+                confZone=set(tmpImg[y1:y1+tresh,x-tresh:x].flatten())
+            if (noConf and y-tresh>0 and x1+tresh<w and set(tmpImg[y-tresh:y,x1:x1+tresh].flatten())!=set([0])):
                 noConf = False
-                j=tmpImg[y-tresh,x1+tresh]
+                confZone=set(tmpImg[y-tresh:y,x1:x1+tresh].flatten())
             if not noConf:
-                bx,by,bw,bh = lBoxes[j]
-                bx1=bx+bw
-                by1=by+bh
-                nx=0;ny=0;nx1=0;ny1=0;
-                nx = x if x<bx else bx
-                ny = y if y<by else by
-                nx1 = x1 if x1>bx1  else bx1
-                ny1 = y1 if y1>by1  else by1
-                lBoxes[i] = [nx,ny,(nx1-nx),(ny1-ny)]
-                tmpImg[ny:ny1,nx:nx1] = i
-                #print x,y,x1,y1,bx,by,bx1,by1,nx,nx1,ny,ny1
-                #print i,j,lBoxes.keys()
-                lBoxes.pop(j)
-                if j in fringe:
-                    fringe.remove(j)
+                confZone.discard(0)
+                confZone.discard(i)
+                for j in confZone:
+                    lBoxes[i] = mergeRect(lBoxes[i],lBoxes[j])
+                    (nx,ny,nw,nh) = lBoxes[i]
+                    nx1 = nx+nw
+                    ny1 = ny+nh
+                    tmpImg[ny:ny1,nx:nx1] = i
+                    #print x,y,x1,y1,bx,by,bx1,by1,nx,nx1,ny,ny1
+                    #print i,j,lBoxes.keys()
+                    lBoxes.pop(j)
+                    if j in fringe:
+                        fringe.remove(j)
                 fringe.append(i)
                 #print "dsadas",i,j,lBoxes.keys()
-    #print(len(lBoxes.keys()))
+    print("dasdas",lBoxes.keys())
     return lBoxes
 
 
 def isValidBox(box):
     x,y,w,h = box
     if ((h>70 and h<150) or (w>70 and w<150)):
-        if calc_desc(frame,(x,y,w,h))>10:
+        if calc_desc(frame,(x,y,w,h))>200:
             return True;
     return False;
 
@@ -88,11 +106,6 @@ def find_contor(label,k):
     res2 = cv2.morphologyEx(label_tmp, cv2.MORPH_OPEN, kernel)
     contours, hierarchy = cv2.findContours(label_tmp, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     return contours
-
-def calc_desc(img,desc):
-    x,y,w,h  = desc
-    kp = fast.detect(img[y-10:y+h+10,x-10:x+w+10], None)
-    return len(kp)
 
 def getposition(box):
     pos=""
@@ -111,7 +124,7 @@ def getposition(box):
         pos="C"
     return pos
 
-def getPointswithContour(cnt,box,disp):
+def getDistancewithContour(cnt,box,disp):
     points = []
     x,y,w,h  = box
     dist = 0.0
@@ -124,11 +137,10 @@ def getPointswithContour(cnt,box,disp):
         #print(cv2.pointPolygonTest(cnt,(xp,yp),False))
         if(cv2.pointPolygonTest(cnt,(xp,yp),False)>=0):
             points.append((yp,xp))
-            D = bf/disp[yp,xp]
-            if D==inf:
+            if disp[yp,xp]==0:
                 infCount+=1
             else:
-                dist+=D
+                dist+= (bf/disp[yp,xp])
     if infCount < numOfPoints-numOfPoints/2 and dist/(numOfPoints-infCount)<100:
         return dist/(numOfPoints-infCount)
     else:
@@ -146,8 +158,8 @@ b = 30
 
 bf = f*b
 
-cap.set(cv2.cv.CV_CAP_PROP_FPS,10);
-cap1.set(cv2.cv.CV_CAP_PROP_FPS,10);
+cap.set(cv2.cv.CV_CAP_PROP_FPS,3);
+cap1.set(cv2.cv.CV_CAP_PROP_FPS,3);
 
 ret,frameRight = cap.read()
 a = np.array([range(0,frameRight.shape[1]),range(0,frameRight.shape[1])])
@@ -200,7 +212,7 @@ while(True):
     #keypoints = detector.detect(frameRight)
     # define criteria, number of clusters(K) and apply kmeans()
     criteria = (cv2.TERM_CRITERIA_MAX_ITER, 6, 1.0)
-    K = 4
+    K = 5
     ret,label,center=cv2.kmeans(Kvalues,K,criteria,10,cv2.KMEANS_PP_CENTERS)
     # Now convert back into uint8, and make original image
     center = np.uint8(center)
@@ -214,7 +226,9 @@ while(True):
     test_cont = find_contor(label,2)
 
     boxes = {}
+    distList = {}
     index =0;
+    contList = {}
     for i in range(0,K):
         tmp_cont = np.asarray(contors[i])
         for j in range(0,tmp_cont.shape[0]):
@@ -223,23 +237,24 @@ while(True):
             x,y,w,h = cv2.boundingRect(cnt)
             box_temp = (x,y,w,h)
             if isValidBox(box_temp):
-                dist = getPointswithContour(cnt,box_temp,disparity)
+                dist = getDistancewithContour(cnt,box_temp,disparity)
                 if dist != inf:
-                    print dist
-                    boxes[index] = box_temp
+                    distList[index],boxes[index] = dist,box_temp
+                    contList[index] = cnt
                     index+=1;
 
     #for i in boxes.keys():
     #    if not isValidBox(boxes[i]):
     #        boxes.pop(i)
-
-    boxes = nonMaxSup(boxes,3)
+    boxes = nonMaxSup(boxes,20)
     for i in boxes.keys():
         x,y,w,h = boxes[i]
         pos = getposition(boxes[i])
         cv2.rectangle(frame,(x,y),(x+w,y+h),(0,255,0),2)
         cv2.rectangle(disparity,(x,y),(x+w,y+h),(0,255,0),2)
-        cv2.putText(frame,pos,(x+w/2,y+h/2),cv2.FONT_HERSHEY_PLAIN,4,(255,255,255))
+        dist = getDistancewithContour(contList[i],boxes[i],disparity)
+        if(dist!=inf):
+            cv2.putText(frame,str(int(dist)),(x+w/2,y+h/2),cv2.FONT_HERSHEY_PLAIN,4,(255,255,255))
         #else:
         #    if calc_desc(frame,(x,y,w,h))>10:
         #        cv2.rectangle(frame,(x,y),(x+w,y+h),(255,0,0),2)
