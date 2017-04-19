@@ -1,5 +1,7 @@
 import numpy as np
+import random
 import cv2
+from numpy import inf
 
 def nonMaxSup(lBoxes,tresh):
     w = frame.shape[1]
@@ -109,6 +111,28 @@ def getposition(box):
         pos="C"
     return pos
 
+def getPointswithContour(cnt,box,disp):
+    points = []
+    x,y,w,h  = box
+    dist = 0.0
+    infCount=0
+    numOfPoints = 10
+    while(len(points)<numOfPoints):
+        xp = random.randint(x,x+w)
+        yp = random.randint(y,y+h)
+        #print(xp,yp)
+        #print(cv2.pointPolygonTest(cnt,(xp,yp),False))
+        if(cv2.pointPolygonTest(cnt,(xp,yp),False)>=0):
+            points.append((yp,xp))
+            D = bf/disp[yp,xp]
+            if D==inf:
+                infCount+=1
+            else:
+                dist+=D
+    if infCount < numOfPoints-numOfPoints/2 and dist/(numOfPoints-infCount)<100:
+        return dist/(numOfPoints-infCount)
+    else:
+        return inf
 
 cap = cv2.VideoCapture(1)
 cap1 = cv2.VideoCapture(2)
@@ -116,6 +140,11 @@ leftInt = np.array([[916.5253,0,386.6512],[0,952.5333,194.1781],[0, 0,1.0000]])
 rightInt = np.array([[997.3000,0,231.4237],[0,980.8277,126.2737],[0,0,1.0000]])
 rightExt = np.array([0.0172,-0.4886,-0.0080,-0.0053,2.5232])
 leftExt = np.array([0.1186,-5.6059,0.0165,0.0364,22.0870])
+
+f = (leftInt[0][0] + leftInt[1][1] +  rightInt[0][0] + rightInt[1][1])/40.0
+b = 30
+
+bf = f*b
 
 cap.set(cv2.cv.CV_CAP_PROP_FPS,10);
 cap1.set(cv2.cv.CV_CAP_PROP_FPS,10);
@@ -151,11 +180,11 @@ while(True):
     frameLeft = cv2.undistort(frameLeft, leftInt, leftExt, None, None)
 
 
-    stereo = cv2.StereoSGBM(0, 96, 5, 600, 2400, 20, 16, 1,  100, 20,True)
-    #stereo = cv2.StereoSGBM(0, 32, 5, 600, 2400, 20, 16, 1,  100, 20,True)
+    #stereo = cv2.StereoSGBM(0, 96, 5, 600, 2400, 20, 16, 1,  100, 20,True)
+    stereo = cv2.StereoSGBM(0, 64, 10, 600, 2400, 20, 16, 1,  100, 20,True)
     #stereo = cv2.StereoBM(1, 16, 15)
-    disparity = stereo.compute(frameLeft,frameRight,cv2.CV_32F)
-    disparity = cv2.convertScaleAbs(disparity)
+    disparityMat = stereo.compute(frameLeft,frameRight,cv2.CV_32F)
+    disparity = cv2.convertScaleAbs(disparityMat)
     
     
     kp = fast.detect(frameRight, None)
@@ -171,7 +200,7 @@ while(True):
     #keypoints = detector.detect(frameRight)
     # define criteria, number of clusters(K) and apply kmeans()
     criteria = (cv2.TERM_CRITERIA_MAX_ITER, 6, 1.0)
-    K = 5
+    K = 4
     ret,label,center=cv2.kmeans(Kvalues,K,criteria,10,cv2.KMEANS_PP_CENTERS)
     # Now convert back into uint8, and make original image
     center = np.uint8(center)
@@ -192,12 +221,17 @@ while(True):
             cnt = tmp_cont[j]
             #cv2.drawContours(frame, [cnt], -1, (0,255,0), 1)
             x,y,w,h = cv2.boundingRect(cnt)
-            boxes[index] = (x,y,w,h)
-            index+=1;
+            box_temp = (x,y,w,h)
+            if isValidBox(box_temp):
+                dist = getPointswithContour(cnt,box_temp,disparity)
+                if dist != inf:
+                    print dist
+                    boxes[index] = box_temp
+                    index+=1;
 
-    for i in boxes.keys():
-        if not isValidBox(boxes[i]):
-            boxes.pop(i)
+    #for i in boxes.keys():
+    #    if not isValidBox(boxes[i]):
+    #        boxes.pop(i)
 
     boxes = nonMaxSup(boxes,3)
     for i in boxes.keys():
