@@ -127,7 +127,7 @@ def getposition(box):
 def getDistancewithContour(cnt,box,disp):
     points = []
     x,y,w,h  = box
-    dist = 0.0
+    dist = []
     infCount=0
     numOfPoints = 10
     while(len(points)<numOfPoints):
@@ -135,14 +135,19 @@ def getDistancewithContour(cnt,box,disp):
         yp = random.randint(y,y+h)
         #print(xp,yp)
         #print(cv2.pointPolygonTest(cnt,(xp,yp),False))
-        if(cv2.pointPolygonTest(cnt,(xp,yp),False)>=0):
+        if(cv2.pointPolygonTest(cnt,(xp,yp),False)>=0) and (yp,xp) not in points :
             points.append((yp,xp))
             if disp[yp,xp]==0:
                 infCount+=1
             else:
-                dist+= (bf/disp[yp,xp])
-    if infCount < numOfPoints-numOfPoints/2 and dist/(numOfPoints-infCount)<100:
-        return dist/(numOfPoints-infCount)
+                dist.append(bf/disp[yp,xp])
+    print points
+    final = [x for x in dist if abs(x-np.mean(dist)) < 1 * np.std(dist)]
+    print dist
+    print final
+    retDist = sum(final)/len(final)
+    if infCount < numOfPoints-numOfPoints/2 and retDist<100:
+        return retDist
     else:
         return inf
 
