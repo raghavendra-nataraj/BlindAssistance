@@ -80,7 +80,7 @@ def find_contor(label,k):
     kernel = np.ones((10,10),np.uint8)
     label_tmp = label == k
     label_tmp = label_tmp.astype(np.uint8)
-    label_tmp = label_tmp.reshape(gray.shape)
+    label_tmp = label_tmp.reshape(frameRight.shape)
     ret, thresh = cv2.threshold(label_tmp, 127, 255, 0)
     res2 = cv2.morphologyEx(label_tmp, cv2.MORPH_CLOSE, kernel)
     res2 = cv2.morphologyEx(label_tmp, cv2.MORPH_OPEN, kernel)
@@ -109,12 +109,22 @@ def getposition(box):
         pos="C"
     return pos
 
+
 cap = cv2.VideoCapture(1)
-ret,frame = cap.read()
-a = np.array([range(0,frame.shape[1]),range(0,frame.shape[1])])
-col = np.repeat(a,frame.shape[0]/2,axis=0)
-b = np.array([range(0,frame.shape[0]),range(0,frame.shape[0])])
-row = np.repeat(b,frame.shape[1]/2,axis=0)
+cap1 = cv2.VideoCapture(2)
+leftInt = np.array([[916.5253,0,386.6512],[0,952.5333,194.1781],[0, 0,1.0000]])
+rightInt = np.array([[997.3000,0,231.4237],[0,980.8277,126.2737],[0,0,1.0000]])
+rightExt = np.array([0.0172,-0.4886,-0.0080,-0.0053,2.5232])
+leftExt = np.array([0.1186,-5.6059,0.0165,0.0364,22.0870])
+
+cap.set(cv2.cv.CV_CAP_PROP_FPS,10);
+cap1.set(cv2.cv.CV_CAP_PROP_FPS,10);
+
+ret,frameRight = cap.read()
+a = np.array([range(0,frameRight.shape[1]),range(0,frameRight.shape[1])])
+col = np.repeat(a,frameRight.shape[0]/2,axis=0)
+b = np.array([range(0,frameRight.shape[0]),range(0,frameRight.shape[0])])
+row = np.repeat(b,frameRight.shape[1]/2,axis=0)
 row = row.transpose()
 row = row.reshape((-1,1))
 col = col.reshape((-1,1))
@@ -124,12 +134,31 @@ fast = cv2.FastFeatureDetector()
 orb = cv2.ORB()
 
 while(True):
-    ret,frame = cap.read()
-    #frame = cv2.cvtColor(frames,cv2.COLOR_BGR2LAB)
-    frame = cv2.medianBlur(frame,9)
-    gray = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
-    gray = cv2.medianBlur(gray,5)    
-    kp = fast.detect(gray, None)
+    ret,frameRight = cap.read()
+    frame = frameRight 
+    frameRight = cv2.medianBlur(frameRight,9)
+    frameRight = cv2.cvtColor(frameRight,cv2.COLOR_BGR2GRAY)
+    h,  w = frameRight.shape[:2]
+    #newcameramtxRight, roi=cv2.getOptimalNewCameraMatrix(frameRight,rightExt,(w,h),1)
+    frameRight = cv2.undistort(frameRight, rightInt, rightExt, None,None)
+
+    
+    ret,frameLeft = cap1.read()
+    frameLeft = cv2.medianBlur(frameLeft,9)
+    frameLeft=cv2.cvtColor(frameLeft, cv2.COLOR_BGR2GRAY)
+    h,  w = frameLeft.shape[:2]
+    #newcameramtxLeft, roi=cv2.getOptimalNewCameraMatrix(frame1,leftExt,(w,h),1,(w,h))
+    frameLeft = cv2.undistort(frameLeft, leftInt, leftExt, None, None)
+
+
+    stereo = cv2.StereoSGBM(0, 96, 5, 600, 2400, 20, 16, 1,  100, 20,True)
+    #stereo = cv2.StereoSGBM(0, 32, 5, 600, 2400, 20, 16, 1,  100, 20,True)
+    #stereo = cv2.StereoBM(1, 16, 15)
+    disparity = stereo.compute(frameLeft,frameRight,cv2.CV_32F)
+    disparity = cv2.convertScaleAbs(disparity)
+    
+    
+    kp = fast.detect(frameRight, None)
     #kp = orb.detect(frame,None)
     #kp, des = orb.compute(frame, kp)
     Z = frame.reshape((-1,3))
@@ -139,7 +168,7 @@ while(True):
     #Kvalues = np.column_stack((row,col,Z))
     Kvalues = Z
     Kvalues = np.array(Kvalues)
-    #keypoints = detector.detect(gray)
+    #keypoints = detector.detect(frameRight)
     # define criteria, number of clusters(K) and apply kmeans()
     criteria = (cv2.TERM_CRITERIA_MAX_ITER, 6, 1.0)
     K = 5
@@ -175,6 +204,7 @@ while(True):
         x,y,w,h = boxes[i]
         pos = getposition(boxes[i])
         cv2.rectangle(frame,(x,y),(x+w,y+h),(0,255,0),2)
+        cv2.rectangle(disparity,(x,y),(x+w,y+h),(0,255,0),2)
         cv2.putText(frame,pos,(x+w/2,y+h/2),cv2.FONT_HERSHEY_PLAIN,4,(255,255,255))
         #else:
         #    if calc_desc(frame,(x,y,w,h))>10:
@@ -185,7 +215,8 @@ while(True):
     #cv2.drawContours(frame, test_cont, -1, (0,255,0), 1)
     
     #frame = cv2.drawKeypoints(frame, kp, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-    cv2.imshow('res2',frame)
+    cv2.imshow('frame',frame)
+    cv2.imshow('disparity',disparity)
     '''
     # find and draw the keypoints
     kp = fast.detect(gray, None)
