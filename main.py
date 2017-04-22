@@ -128,6 +128,13 @@ def nonMaxSup(lBoxes,tresh):
     return lBoxes
 
 
+def isValidDoor(box):
+    x,y,w,h = box
+    if ((h>300 and h<450) and (w>20 and w<200)):
+        if calc_desc(frame,(x,y,w,h))>80:
+            return True;
+    return False;
+
 def isValidBox(box):
     x,y,w,h = box
     if ((h>70 and h<150) or (w>70 and w<150)):
@@ -271,7 +278,6 @@ while(True):
     doors = []
     for i in range(0,K):
         cont = find_contor(label,i)
-        x,y,w,h = findDoors(frame)
         contors.append(cont)
     res = center[label.flatten()]
     res2 = res.reshape((frame.shape))
@@ -280,6 +286,7 @@ while(True):
     boxes = {}
     distList = {}
     index =0;
+    doors=[]
     contList = {}
     for i in range(0,K):
         tmp_cont = np.asarray(contors[i])
@@ -295,7 +302,8 @@ while(True):
                     boxes[index] = box_temp
                     contList[index] = [cnt]
                     index+=1;
-
+            if isValidDoor(box_temp):
+                doors.append(box_temp);    
     #for i in boxes.keys():
     #    if not isValidBox(boxes[i]):
     #        boxes.pop(i)
@@ -315,10 +323,12 @@ while(True):
         #approx = cv2.approxPolyDP(cnt,epsilon,True)
         #cv2.drawContours(frame, [cnt], -1, (0,255,0), 1)
     #cv2.drawContours(frame, test_cont, -1, (0,255,0), 1)
-    
+    for door in doors:
+        x,y,w,h = door
+        cv2.rectangle(frame,(x,y),(x+w,y+h),(255,0,0),2)
     #frame = cv2.drawKeypoints(frame, kp, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
     cv2.imshow('frame',frame)
-    cv2.imshow('disparity',disparity)
+    #cv2.imshow('disparity',disparity)
     '''
     # find and draw the keypoints
     kp = fast.detect(gray, None)
