@@ -143,7 +143,7 @@ def find_contor(label,k):
     ret, thresh = cv2.threshold(label_tmp, 127, 255, 0)
     res2 = cv2.morphologyEx(label_tmp, cv2.MORPH_CLOSE, kernel)
     res2 = cv2.morphologyEx(label_tmp, cv2.MORPH_OPEN, kernel)
-    contours, hierarchy = cv2.findContours(label_tmp, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    im2,contours, hierarchy = cv2.findContours(label_tmp, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     return contours
 
 def getposition(box):
@@ -192,18 +192,18 @@ def getDistancewithContour(cnts,box,disp):
 
 cap = cv2.VideoCapture(1)
 cap1 = cv2.VideoCapture(2)
-leftInt = np.array([[916.5253,0,386.6512],[0,952.5333,194.1781],[0, 0,1.0000]])
-rightInt = np.array([[997.3000,0,231.4237],[0,980.8277,126.2737],[0,0,1.0000]])
-rightExt = np.array([0.0172,-0.4886,-0.0080,-0.0053,2.5232])
-leftExt = np.array([0.1186,-5.6059,0.0165,0.0364,22.0870])
+leftInt = np.array([[1056.22474281452,2.12180012416206,464.811727631556],[0,1079.15545953137,167.86460716483],[0,0,1]])
+rightInt = np.array([[1041.65499997853,-26.7186301189883,274.136149420335],[0,1010.94417804556,115.2322707182],[0,0,1]])
+rightExt = np.array([-0.206102947808262, -0.552547032399206, 0.0012501669630201, 0.0324427475803376, 3.04532230656703])
+leftExt = np.array([-0.673805020708009,5.14069106623387,0.0393615423664669,0.0209766146341484,-20.3847474068451])
 
 f = (leftInt[0][0] + leftInt[1][1] +  rightInt[0][0] + rightInt[1][1])/40.0
 b = 30
 
 bf = f*b
 
-cap.set(cv2.cv.CV_CAP_PROP_FPS,3);
-cap1.set(cv2.cv.CV_CAP_PROP_FPS,3);
+cap.set(cv2.CAP_PROP_FPS,3);
+cap1.set(cv2.CAP_PROP_FPS,3);
 
 ret,frameRight = cap.read()
 a = np.array([range(0,frameRight.shape[1]),range(0,frameRight.shape[1])])
@@ -215,33 +215,39 @@ row = row.reshape((-1,1))
 col = col.reshape((-1,1))
 row = np.float32(row)
 col = np.float32(col)
-fast = cv2.FastFeatureDetector()
-orb = cv2.ORB()
+fast = cv2.FastFeatureDetector_create()
+orb = cv2.ORB_create()
 
 while(True):
     ret,frameRight = cap.read()
-    frame = frameRight 
+    ret,frameLeft = cap1.read()
+    stereo = cv2.StereoSGBM_create(0, 64, 10, 600, 2400, 20, 16, 1,  100, 20,True)
+    disparity = stereo.compute(frameRight,frameLeft,cv2.CV_32F)
+    frame = frameRight.copy()
     frameRight = cv2.medianBlur(frameRight,9)
     frameRight = cv2.cvtColor(frameRight,cv2.COLOR_BGR2GRAY)
+    frameRight = cv2.equalizeHist(frameRight)
     h,  w = frameRight.shape[:2]
     #newcameramtxRight, roi=cv2.getOptimalNewCameraMatrix(frameRight,rightExt,(w,h),1)
     frameRight = cv2.undistort(frameRight, rightInt, rightExt, None,None)
 
     
-    ret,frameLeft = cap1.read()
+    
     frameLeft = cv2.medianBlur(frameLeft,9)
     frameLeft=cv2.cvtColor(frameLeft, cv2.COLOR_BGR2GRAY)
+    frameLeft = cv2.equalizeHist(frameLeft)
     h,  w = frameLeft.shape[:2]
     #newcameramtxLeft, roi=cv2.getOptimalNewCameraMatrix(frame1,leftExt,(w,h),1,(w,h))
     frameLeft = cv2.undistort(frameLeft, leftInt, leftExt, None, None)
 
 
     #stereo = cv2.StereoSGBM(0, 96, 5, 600, 2400, 20, 16, 1,  100, 20,True)
-    stereo = cv2.StereoSGBM(0, 64, 10, 600, 2400, 20, 16, 1,  100, 20,True)
-    #stereo = cv2.StereoBM(1, 16, 15)
-    disparityMat = stereo.compute(frameLeft,frameRight,cv2.CV_32F)
-    disparity = cv2.convertScaleAbs(disparityMat)
-    
+
+    #stereo = cv2.StereoBM_create(1, 16, 15)
+    #norm_coeff = 255/ disparity.max()
+    #disparity= disparity*norm_coeff / 255
+    #disparity = cv2.filterSpeckles(disparityMat,0,10,10)
+    disparity = cv2.convertScaleAbs(disparity)
     
     kp = fast.detect(frameRight, None)
     #kp = orb.detect(frame,None)
@@ -257,13 +263,15 @@ while(True):
     # define criteria, number of clusters(K) and apply kmeans()
     criteria = (cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
     K = 3
-    ret,label,center=cv2.kmeans(Kvalues,K,criteria,10,cv2.KMEANS_PP_CENTERS)
+    ret,label,center=cv2.kmeans(Kvalues,K,None,criteria,10,cv2.KMEANS_PP_CENTERS)
     # Now convert back into uint8, and make original image
     center = np.uint8(center)
     #center = center[:,[2,3,4]]
     contors = []
+    doors = []
     for i in range(0,K):
         cont = find_contor(label,i)
+        x,y,w,h = findDoors(frame)
         contors.append(cont)
     res = center[label.flatten()]
     res2 = res.reshape((frame.shape))
@@ -291,14 +299,12 @@ while(True):
     #for i in boxes.keys():
     #    if not isValidBox(boxes[i]):
     #        boxes.pop(i)
-    boxes = nonMaxSup(boxes,20)
+    boxes = nonMaxSup(boxes,5)
     for i in boxes.keys():
         x,y,w,h = boxes[i]
         pos = getposition(boxes[i])
         cv2.rectangle(frame,(x,y),(x+w,y+h),(0,255,0),2)
         cv2.rectangle(disparity,(x,y),(x+w,y+h),(0,255,0),2)
-        x,y,w,h = findDoors(frame)
-        cv2.rectangle(frame,(x,y),(x+w,y+h),(0,0,255),2)
         dist = getDistancewithContour(contList[i],boxes[i],disparity)
         if(dist!=inf):
             cv2.putText(frame,str(int(dist)),(x+w/2,y+h/2),cv2.FONT_HERSHEY_PLAIN,4,(255,255,255))
