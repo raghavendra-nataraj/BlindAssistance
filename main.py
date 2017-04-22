@@ -2,6 +2,46 @@ import numpy as np
 import random
 import cv2
 from numpy import inf
+import imutils
+
+def corner_return(image):        
+    image_cp = image.copy()
+    image=cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
+    blr = cv2.GaussianBlur(image,(5,5),0)
+    #blr =cv2.bilateralFilter(image,9,40,75)
+    
+    rs= cv2.goodFeaturesToTrack(blr,20,0.03,20,None,None,2,useHarrisDetector=True,k=0.04)                                
+    #r,c,d= rs.shape
+    
+    #rs=np.int0(rs)
+    for k in rs:
+        x,y= k.ravel()
+        cv2.circle(image,(x,y),5,127,-1)
+    #cv2.circle(image,(229,400),20,250,-1)     
+                                
+    return image,rs
+
+def ret_contours(image,locs):
+    image_cp = image.copy()
+    image=cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
+    blr =cv2.bilateralFilter(image,9,75,75)
+    edges= cv2.Canny(blr,40,65,apertureSize = 3)
+    edges = cv2.dilate(edges,None, iterations=1)
+    edges = cv2.erode(edges,None, iterations=1)
+    cont = cv2.findContours(edges.copy(),cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
+    cont = cont[0] if imutils.is_cv2() else cont[1]
+    #(cont,_) = contours.sort_contours(cont)
+    max_val=0
+    k=0
+    for a in cont:
+        m=0
+        x,y,w,h = cv2.boundingRect(a)
+    return (x,y,w,h)
+
+def findDoors(image):
+    imagewithcorners,corn_loc= corner_return(image)
+    cont1 =ret_contours(image,corn_loc)
+    return cont1
 
 def calc_desc(img,desc):
     x,y,w,h  = desc
@@ -27,7 +67,6 @@ def mergeRect(rect1,rect2):
 def nonMaxSup(lBoxes,tresh):
     w = frame.shape[1]
     h = frame.shape[0]
-    print(lBoxes.keys())
     tmpImg = np.array(np.random.rand(h,w),np.int32)
     tmpImg.fill(0)
     
@@ -81,18 +120,18 @@ def nonMaxSup(lBoxes,tresh):
                     #print x,y,x1,y1,bx,by,bx1,by1,nx,nx1,ny,ny1
                     #print i,j,lBoxes.keys()
                     lBoxes.pop(j)
+                    contList[i].extend(contList[j])
                     if j in fringe:
                         fringe.remove(j)
                 fringe.append(i)
                 #print "dsadas",i,j,lBoxes.keys()
-    print("dasdas",lBoxes.keys())
     return lBoxes
 
 
 def isValidBox(box):
     x,y,w,h = box
     if ((h>70 and h<150) or (w>70 and w<150)):
-        if calc_desc(frame,(x,y,w,h))>150:
+        if calc_desc(frame,(x,y,w,h))>80:
             return True;
     return False;
 
@@ -124,29 +163,29 @@ def getposition(box):
         pos="C"
     return pos
 
-def getDistancewithContour(cnt,box,disp):
+def getDistancewithContour(cnts,box,disp):
     points = []
     x,y,w,h  = box
     dist = []
     infCount=0
-    numOfPoints = 10
+    numOfPoints = 5
     while(len(points)<numOfPoints):
         xp = random.randint(x,x+w)
         yp = random.randint(y,y+h)
         #print(xp,yp)
         #print(cv2.pointPolygonTest(cnt,(xp,yp),False))
-        if(cv2.pointPolygonTest(cnt,(xp,yp),False)>=0) and (yp,xp) not in points :
+        #print len(cnts)
+        #print [cv2.pointPolygonTest(cnt,(xp,yp),False)>=0 for cnt in cnts]
+        isValidPoint = any([cv2.pointPolygonTest(cnt,(xp,yp),False)>=0 for cnt in cnts])
+        if isValidPoint and (yp,xp) not in points :
             points.append((yp,xp))
             if disp[yp,xp]==0:
                 infCount+=1
             else:
                 dist.append(bf/disp[yp,xp])
-    print points
-    final = [x for x in dist if abs(x-np.mean(dist)) < 1 * np.std(dist)]
-    print dist
-    print final
-    retDist = sum(final)/len(final)
-    if infCount < numOfPoints-numOfPoints/2 and retDist<100:
+    final = [x for x in dist if abs(x-np.mean(dist)) <= 1 * np.std(dist)]
+    if infCount < numOfPoints-numOfPoints/2 and len(final)>0:
+        retDist = sum(final)/len(final)
         return retDist
     else:
         return inf
@@ -244,8 +283,9 @@ while(True):
             if isValidBox(box_temp):
                 dist = getDistancewithContour(cnt,box_temp,disparity)
                 if dist != inf:
-                    distList[index],boxes[index] = dist,box_temp
-                    contList[index] = cnt
+                    distList[index] = dist
+                    boxes[index] = box_temp
+                    contList[index] = [cnt]
                     index+=1;
 
     #for i in boxes.keys():
@@ -257,6 +297,8 @@ while(True):
         pos = getposition(boxes[i])
         cv2.rectangle(frame,(x,y),(x+w,y+h),(0,255,0),2)
         cv2.rectangle(disparity,(x,y),(x+w,y+h),(0,255,0),2)
+        x,y,w,h = findDoors(frame)
+        cv2.rectangle(frame,(x,y),(x+w,y+h),(0,0,255),2)
         dist = getDistancewithContour(contList[i],boxes[i],disparity)
         if(dist!=inf):
             cv2.putText(frame,str(int(dist)),(x+w/2,y+h/2),cv2.FONT_HERSHEY_PLAIN,4,(255,255,255))
