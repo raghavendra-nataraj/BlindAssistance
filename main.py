@@ -3,6 +3,7 @@ import random
 import cv2
 from numpy import inf
 import imutils
+import sys
 
 def corner_return(image):        
     image_cp = image.copy()
@@ -197,8 +198,10 @@ def getDistancewithContour(cnts,box,disp):
     else:
         return inf
 
-cap = cv2.VideoCapture(1)
-cap1 = cv2.VideoCapture(2)
+if sys.argv[1]=="single":
+    print "asdasd"
+    single = True
+    
 leftInt = np.array([[1056.22474281452,2.12180012416206,464.811727631556],[0,1079.15545953137,167.86460716483],[0,0,1]])
 rightInt = np.array([[1041.65499997853,-26.7186301189883,274.136149420335],[0,1010.94417804556,115.2322707182],[0,0,1]])
 rightExt = np.array([-0.206102947808262, -0.552547032399206, 0.0012501669630201, 0.0324427475803376, 3.04532230656703])
@@ -209,8 +212,14 @@ b = 30
 
 bf = f*b
 
+    
+cap = cv2.VideoCapture(1)
 cap.set(cv2.CAP_PROP_FPS,3);
-cap1.set(cv2.CAP_PROP_FPS,3);
+if not single:
+    cap1 = cv2.VideoCapture(2)
+    cap1.set(cv2.CAP_PROP_FPS,3);
+
+
 
 ret,frameRight = cap.read()
 a = np.array([range(0,frameRight.shape[1]),range(0,frameRight.shape[1])])
@@ -227,9 +236,10 @@ orb = cv2.ORB_create()
 
 while(True):
     ret,frameRight = cap.read()
-    ret,frameLeft = cap1.read()
-    stereo = cv2.StereoSGBM_create(0, 64, 10, 600, 2400, 20, 16, 1,  100, 20,True)
-    disparity = stereo.compute(frameRight,frameLeft,cv2.CV_32F)
+    if not single:
+        ret,frameLeft = cap1.read()
+        stereo = cv2.StereoSGBM_create(0, 64, 10, 600, 2400, 20, 16, 1,  100, 20,True)
+        disparity = stereo.compute(frameRight,frameLeft,cv2.CV_32F)
     frame = frameRight.copy()
     frameRight = cv2.medianBlur(frameRight,9)
     frameRight = cv2.cvtColor(frameRight,cv2.COLOR_BGR2GRAY)
@@ -239,22 +249,22 @@ while(True):
     frameRight = cv2.undistort(frameRight, rightInt, rightExt, None,None)
 
     
-    
-    frameLeft = cv2.medianBlur(frameLeft,9)
-    frameLeft=cv2.cvtColor(frameLeft, cv2.COLOR_BGR2GRAY)
-    frameLeft = cv2.equalizeHist(frameLeft)
-    h,  w = frameLeft.shape[:2]
-    #newcameramtxLeft, roi=cv2.getOptimalNewCameraMatrix(frame1,leftExt,(w,h),1,(w,h))
-    frameLeft = cv2.undistort(frameLeft, leftInt, leftExt, None, None)
+    if not single:
+        frameLeft = cv2.medianBlur(frameLeft,9)
+        frameLeft=cv2.cvtColor(frameLeft, cv2.COLOR_BGR2GRAY)
+        frameLeft = cv2.equalizeHist(frameLeft)
+        h,  w = frameLeft.shape[:2]
+        #newcameramtxLeft, roi=cv2.getOptimalNewCameraMatrix(frame1,leftExt,(w,h),1,(w,h))
+        frameLeft = cv2.undistort(frameLeft, leftInt, leftExt, None, None)
 
 
-    #stereo = cv2.StereoSGBM(0, 96, 5, 600, 2400, 20, 16, 1,  100, 20,True)
+        #stereo = cv2.StereoSGBM(0, 96, 5, 600, 2400, 20, 16, 1,  100, 20,True)
 
-    #stereo = cv2.StereoBM_create(1, 16, 15)
-    #norm_coeff = 255/ disparity.max()
-    #disparity= disparity*norm_coeff / 255
-    #disparity = cv2.filterSpeckles(disparityMat,0,10,10)
-    disparity = cv2.convertScaleAbs(disparity)
+        #stereo = cv2.StereoBM_create(1, 16, 15)
+        #norm_coeff = 255/ disparity.max()
+        #disparity= disparity*norm_coeff / 255
+        #disparity = cv2.filterSpeckles(disparityMat,0,10,10)
+        disparity = cv2.convertScaleAbs(disparity)
     
     kp = fast.detect(frameRight, None)
     #kp = orb.detect(frame,None)
@@ -295,6 +305,7 @@ while(True):
             #cv2.drawContours(frame, [cnt], -1, (0,255,0), 1)
             x,y,w,h = cv2.boundingRect(cnt)
             box_temp = (x,y,w,h)
+            '''
             if isValidBox(box_temp):
                 dist = getDistancewithContour(cnt,box_temp,disparity)
                 if dist != inf:
@@ -302,6 +313,7 @@ while(True):
                     boxes[index] = box_temp
                     contList[index] = [cnt]
                     index+=1;
+            '''
             if isValidDoor(box_temp):
                 doors.append(box_temp);    
     #for i in boxes.keys():
@@ -313,7 +325,8 @@ while(True):
         pos = getposition(boxes[i])
         cv2.rectangle(frame,(x,y),(x+w,y+h),(0,255,0),2)
         cv2.rectangle(disparity,(x,y),(x+w,y+h),(0,255,0),2)
-        dist = getDistancewithContour(contList[i],boxes[i],disparity)
+        if not single:
+            dist = getDistancewithContour(contList[i],boxes[i],disparity)
         if(dist!=inf):
             cv2.putText(frame,str(int(dist)),(x+w/2,y+h/2),cv2.FONT_HERSHEY_PLAIN,4,(255,255,255))
         #else:
