@@ -286,7 +286,7 @@ while(True):
     Kvalues = np.array(Kvalues)
     #keypoints = detector.detect(frameRight)
     # define criteria, number of clusters(K) and apply kmeans()
-    criteria = (cv2.TERM_CRITERIA_MAX_ITER, 30, 1.0)
+    criteria = (cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
     K = 5
     ret,label,center=cv2.kmeans(Kvalues,K,None,criteria,3,cv2.KMEANS_PP_CENTERS)
     # Now convert back into uint8, and make original image
