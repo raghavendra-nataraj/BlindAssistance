@@ -177,6 +177,28 @@ def getValidPoints(point,thresh):
     return ((xn,yn),(xn1,yn1))
 
 
+def isDoorOpen(cnts,box,disp):
+    points = []
+    x,y,w,h  = box
+    numOfPoints = 10
+    energy=0
+    blank=0
+    nonBlank=0;
+    while(len(points)<numOfPoints):
+        xp = random.randint(x,x+w)
+        yp = random.randint(y,y+h)
+        #print(xp,yp)
+        #print(cv2.pointPolygonTest(cnt,(xp,yp),False))
+        #print len(cnts)
+        #print [cv2.pointPolygonTest(cnt,(xp,yp),False)>=0 for cnt in cnts]
+        isValidPoint = any([cv2.pointPolygonTest(cnt,(xp,yp),False)>=0 for cnt in cnts])
+        if isValidPoint and (yp,xp) not in points :
+            points.append((yp,xp))
+            energy+=disp[yp,xp]
+    totE =  energy/numOfPoints
+    return totE<30
+
+
 def getDistancewithContour(cnts,box,disp):
     points = []
     x,y,w,h  = box
@@ -203,6 +225,8 @@ def getDistancewithContour(cnts,box,disp):
         return retDist
     else:
         return inf
+
+    
 single = False
 if sys.argv[1]=="single":
     print "asdasd"
@@ -294,6 +318,7 @@ while(True):
     #center = center[:,[2,3,4]]
     contors = []
     doors = []
+    doorContor = []
     for i in range(0,K):
         cont = find_contor(label,i)
         contors.append(cont)
@@ -339,6 +364,7 @@ while(True):
                 #cv2.drawContours(frame,[box],0,(0,0,255),2)
                 if cC>=4:
                     doors.append(box_temp);
+                    doorContor.append(cnt)
                 #haris = corner_return(frame[y:y+h,x:x+w])
                 #for rs in haris:
                 #    x1,y1= rs.ravel()
@@ -364,13 +390,18 @@ while(True):
         #approx = cv2.approxPolyDP(cnt,epsilon,True)
         #cv2.drawContours(frame, [cnt], -1, (0,255,0), 1)
     #cv2.drawContours(frame, test_cont, -1, (0,255,0), 1)
-    for door in doors:
-        x,y,w,h = door
+    for index in range(len(doors)):
+        x,y,w,h = doors[index]
         cv2.rectangle(frame,(x,y),(x+w,y+h),(255,0,0),2)
-    for rs in cornList:
-        rs = map(int,rs)
-        x,y = rs
-        cv2.circle(frame,(x,y),5,127,-1)
+        status = isDoorOpen(doorContor[index],doors[index],disparity)
+        if status:
+            cv2.putText(frame,"Close",(x+w/2,y+h/2),cv2.FONT_HERSHEY_PLAIN,4,(255,255,255))
+        else:
+            cv2.putText(frame,"Open",(x+w/2,y+h/2),cv2.FONT_HERSHEY_PLAIN,4,(255,255,255))
+    #for rs in cornList:
+    #    rs = map(int,rs)
+    #    x,y = rs
+    #    cv2.circle(frame,(x,y),5,127,-1)
     #frame = cv2.drawKeypoints(frame, kp, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
     cv2.imshow('frame',frame)
     #print(set(disparity.flatten()))
