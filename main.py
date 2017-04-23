@@ -4,19 +4,20 @@ import cv2
 from numpy import inf
 import imutils
 import sys
+import math
 
 def corner_return(image):        
     image_cp = image.copy()
     image=cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
     #blr =cv2.bilateralFilter(image,9,40,75)
     
-    rs= cv2.goodFeaturesToTrack(image,20,0.1,10,None,None,2,useHarrisDetector=True,k=0.04)                                
+    rs= cv2.goodFeaturesToTrack(image,20,0.1,20,None,None,2,useHarrisDetector=False,k=0.04)                                
     #r,c,d= rs.shape
     
     #rs=np.int0(rs)
     #cv2.circle(image,(229,400),20,250,-1)     
                                 
-    return rs
+    return rs    
 
 def ret_contours(image,locs):
     image_cp = image.copy()
@@ -125,12 +126,39 @@ def nonMaxSup(lBoxes,tresh):
     return lBoxes
 
 
-def isValidDoor(box):
+def isValidDoor(box,a):
     x,y,w,h = box
-    if ((h>80) and (w>100 and w<200) and (h/float(w))>1 and (h/float(w))<3):
-        if calc_desc(frame,(x,y,w,h))>50:
-            return True;
-    return False;
+    locs= corner_return(frame)
+    counter=0
+    max_val=0
+    #epsilon = 0.1*cv2.arcLength(box,True)
+    #a = cv2.approxPolyDP(a,epsilon,True)
+    #k=cv2.contourArea(a)
+    for i in range(len(locs)):
+           z= locs[i]
+           x1 = z[0,0]
+           y1 = z[0,1]
+           rat = (h/w)
+           
+           if (x<=x1<=(x+w)) and (y<=y1<=(y+h)) and ((w/h)<0.8) and (2<rat<5) and (h>(2*w)):
+               counter+=1
+    if (counter>max_val):
+            max_val=counter
+            #image_cp1=image.copy()
+            for i in range (len(locs)):
+                pnts= locs[i]
+                x2 = pnts[0,0]
+                y2= pnts[0,1]
+                
+                distanc = cv2.pointPolygonTest(a,(x2,y2),True)       
+                if distanc>=0:
+                    E_dist = math.sqrt( (x2 - x1)**2 + (y2 - y1)**2 )
+                    if (h/3)<=E_dist<h:
+                        return True,x2,y2;
+                                
+    
+    return False,0,0;
+
 
 def isValidBox(box):
     x,y,w,h = box
@@ -184,9 +212,11 @@ def isDoorOpen(cnts,box,disp):
     energy=0
     blank=0
     nonBlank=0;
+    waitCounter=0
     while(len(points)<numOfPoints):
         xp = random.randint(x,x+w)
         yp = random.randint(y,y+h)
+
         #print(xp,yp)
         #print(cv2.pointPolygonTest(cnt,(xp,yp),False))
         #print len(cnts)
@@ -195,8 +225,12 @@ def isDoorOpen(cnts,box,disp):
         if isValidPoint and (yp,xp) not in points :
             points.append((yp,xp))
             energy+=disp[yp,xp]
+            waitCounter=0
+        waitCounter+=1
+
     totE =  energy/numOfPoints
-    return totE<30
+    print totE
+    return totE>50
 
 
 def getDistancewithContour(cnts,box,disp):
@@ -265,26 +299,26 @@ orb = cv2.ORB_create()
 
 while(True):
     ret,frameRight = cap.read()
+    frameRight = cv2.medianBlur(frameRight,9)
+    frame = frameRight.copy()
+    frameRight = cv2.cvtColor(frameRight,cv2.COLOR_BGR2GRAY)
+    frameRight = cv2.equalizeHist(frameRight)
     if not single:
         ret,frameLeft = cap1.read()
+        frameLeft = cv2.medianBlur(frameLeft,9)
+        frameLeft=cv2.cvtColor(frameLeft, cv2.COLOR_BGR2GRAY)
+        frameLeft = cv2.equalizeHist(frameLeft)
         stereo = cv2.StereoSGBM_create(0, 64, 10, 600, 2400, 20, 16, 1,  100, 20,True)
         disparity = stereo.compute(frameRight,frameLeft,cv2.CV_32F)
         np.bitwise_not(disparity,disparity)
         disparity = cv2.convertScaleAbs(disparity)
 
-    frame = frameRight.copy()
-    frameRight = cv2.medianBlur(frameRight,9)
-    frameRight = cv2.cvtColor(frameRight,cv2.COLOR_BGR2GRAY)
-    frameRight = cv2.equalizeHist(frameRight)
     h,  w = frameRight.shape[:2]
     #newcameramtxRight, roi=cv2.getOptimalNewCameraMatrix(frameRight,rightExt,(w,h),1)
     frameRight = cv2.undistort(frameRight, rightInt, rightExt, None,None)
 
     
     if not single:
-        frameLeft = cv2.medianBlur(frameLeft,9)
-        frameLeft=cv2.cvtColor(frameLeft, cv2.COLOR_BGR2GRAY)
-        frameLeft = cv2.equalizeHist(frameLeft)
         h,  w = frameLeft.shape[:2]
         #newcameramtxLeft, roi=cv2.getOptimalNewCameraMatrix(frame1,leftExt,(w,h),1,(w,h))
         frameLeft = cv2.undistort(frameLeft, leftInt, leftExt, None, None)
@@ -311,7 +345,7 @@ while(True):
     #keypoints = detector.detect(frameRight)
     # define criteria, number of clusters(K) and apply kmeans()
     criteria = (cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-    K = 5
+    K = 3
     ret,label,center=cv2.kmeans(Kvalues,K,None,criteria,3,cv2.KMEANS_PP_CENTERS)
     # Now convert back into uint8, and make original image
     center = np.uint8(center)
@@ -346,7 +380,19 @@ while(True):
                     boxes[index] = box_temp
                     contList[index] = [cnt]
                     index+=1;
-            if isValidDoor(box_temp):
+                    
+            epsilon = 0.1*cv2.arcLength(cnt,True)
+            cnt = cv2.approxPolyDP(cnt,epsilon,True)
+            x,y,w,h = cv2.boundingRect(cnt)
+            box_temp = (x,y,w,h)
+            
+            #k=cv2.contourArea(a)
+            boolC,z1,z2 = isValidDoor(box_temp,cnt)
+            
+            x1= []
+            y2= []
+            if boolC:
+                print "hello"
                 rect = cv2.minAreaRect(cnt)
                 box = cv2.boxPoints(rect)
                 cC=0
@@ -363,6 +409,8 @@ while(True):
                 #box = np.int0(box)
                 #cv2.drawContours(frame,[box],0,(0,0,255),2)
                 if cC>=4:
+                    x1.append(z1)
+                    y2.append(z2)
                     doors.append(box_temp);
                     doorContor.append(cnt)
                 #haris = corner_return(frame[y:y+h,x:x+w])
@@ -373,6 +421,8 @@ while(True):
     #for i in boxes.keys():
     #    if not isValidBox(boxes[i]):
     #        boxes.pop(i)
+    
+                
     boxes = nonMaxSup(boxes,5)
     for i in boxes.keys():
         x,y,w,h = boxes[i]
@@ -383,40 +433,20 @@ while(True):
             dist = getDistancewithContour(contList[i],boxes[i],disparity)
         if(dist!=inf):
             cv2.putText(frame,str(int(dist)),(x+w/2,y+h/2),cv2.FONT_HERSHEY_PLAIN,4,(255,255,255))
-        #else:
-        #    if calc_desc(frame,(x,y,w,h))>10:
-        #        cv2.rectangle(frame,(x,y),(x+w,y+h),(255,0,0),2)
-        #epsilon = 0.1*cv2.arcLength(cnt,True)
-        #approx = cv2.approxPolyDP(cnt,epsilon,True)
-        #cv2.drawContours(frame, [cnt], -1, (0,255,0), 1)
-    #cv2.drawContours(frame, test_cont, -1, (0,255,0), 1)
     for index in range(len(doors)):
         x,y,w,h = doors[index]
+        cv2.circle(frame,(x1[index],y2[index]),20,127,thickness=1, lineType=8, shift=0)
         cv2.rectangle(frame,(x,y),(x+w,y+h),(255,0,0),2)
         status = isDoorOpen(doorContor[index],doors[index],disparity)
         if status:
             cv2.putText(frame,"Close",(x+w/2,y+h/2),cv2.FONT_HERSHEY_PLAIN,4,(255,255,255))
         else:
             cv2.putText(frame,"Open",(x+w/2,y+h/2),cv2.FONT_HERSHEY_PLAIN,4,(255,255,255))
-    #for rs in cornList:
-    #    rs = map(int,rs)
-    #    x,y = rs
-    #    cv2.circle(frame,(x,y),5,127,-1)
     #frame = cv2.drawKeypoints(frame, kp, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
     cv2.imshow('frame',frame)
     #print(set(disparity.flatten()))
     cv2.imshow('disparity',disparity)
-    '''
-    # find and draw the keypoints
-    kp = fast.detect(gray, None)
-    keypoints = detector.detect(gray)
-    print(keypoints)
-    im = cv2.drawKeypoints(frame, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-    cv2.imshow('frame',im)
-    '''
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
-
-    # When everything done, release the capture
 cap.release()
 cv2.destroyAllWindows()
