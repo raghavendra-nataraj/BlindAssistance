@@ -8,19 +8,15 @@ import sys
 def corner_return(image):        
     image_cp = image.copy()
     image=cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
-    blr = cv2.GaussianBlur(image,(5,5),0)
     #blr =cv2.bilateralFilter(image,9,40,75)
     
-    rs= cv2.goodFeaturesToTrack(blr,20,0.03,20,None,None,2,useHarrisDetector=True,k=0.04)                                
+    rs= cv2.goodFeaturesToTrack(image,20,0.1,10,None,None,2,useHarrisDetector=True,k=0.04)                                
     #r,c,d= rs.shape
     
     #rs=np.int0(rs)
-    for k in rs:
-        x,y= k.ravel()
-        cv2.circle(image,(x,y),5,127,-1)
     #cv2.circle(image,(229,400),20,250,-1)     
                                 
-    return image,rs
+    return rs
 
 def ret_contours(image,locs):
     image_cp = image.copy()
@@ -131,14 +127,14 @@ def nonMaxSup(lBoxes,tresh):
 
 def isValidDoor(box):
     x,y,w,h = box
-    if ((h>300 and h<450) and (w>20 and w<200)):
-        if calc_desc(frame,(x,y,w,h))>80:
+    if ((h>80) and (w>60 and w<200) and (h/float(w))>1 and (h/float(w))<3):
+        if calc_desc(frame,(x,y,w,h))>50:
             return True;
     return False;
 
 def isValidBox(box):
     x,y,w,h = box
-    if ((h>70 and h<150) or (w>70 and w<150)):
+    if ((h>30 and h<150) or (w>30 and w<150)):
         if calc_desc(frame,(x,y,w,h))>80:
             return True;
     return False;
@@ -171,6 +167,16 @@ def getposition(box):
         pos="C"
     return pos
 
+
+def getValidPoints(point,thresh):
+    x,y = point
+    xn = x-thresh if x-thresh>0 else 0
+    yn = y-thresh if y-thresh>0 else 0
+    xn1 = x+thresh if x+thresh>0 else frame.shape[0]
+    yn1 = y+thresh if y+thresh>0 else frame.shape[1]
+    return ((xn,yn),(xn1,yn1))
+
+
 def getDistancewithContour(cnts,box,disp):
     points = []
     x,y,w,h  = box
@@ -197,7 +203,7 @@ def getDistancewithContour(cnts,box,disp):
         return retDist
     else:
         return inf
-
+single = False
 if sys.argv[1]=="single":
     print "asdasd"
     single = True
@@ -212,7 +218,6 @@ b = 30
 
 bf = f*b
 
-    
 cap = cv2.VideoCapture(1)
 cap.set(cv2.CAP_PROP_FPS,3);
 if not single:
@@ -240,6 +245,9 @@ while(True):
         ret,frameLeft = cap1.read()
         stereo = cv2.StereoSGBM_create(0, 64, 10, 600, 2400, 20, 16, 1,  100, 20,True)
         disparity = stereo.compute(frameRight,frameLeft,cv2.CV_32F)
+        np.bitwise_not(disparity,disparity)
+        disparity = cv2.convertScaleAbs(disparity)
+
     frame = frameRight.copy()
     frameRight = cv2.medianBlur(frameRight,9)
     frameRight = cv2.cvtColor(frameRight,cv2.COLOR_BGR2GRAY)
@@ -264,9 +272,9 @@ while(True):
         #norm_coeff = 255/ disparity.max()
         #disparity= disparity*norm_coeff / 255
         #disparity = cv2.filterSpeckles(disparityMat,0,10,10)
-        disparity = cv2.convertScaleAbs(disparity)
+        
     
-    kp = fast.detect(frameRight, None)
+    #kp = fast.detect(frameRight, None)
     #kp = orb.detect(frame,None)
     #kp, des = orb.compute(frame, kp)
     Z = frame.reshape((-1,3))
@@ -278,9 +286,9 @@ while(True):
     Kvalues = np.array(Kvalues)
     #keypoints = detector.detect(frameRight)
     # define criteria, number of clusters(K) and apply kmeans()
-    criteria = (cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-    K = 3
-    ret,label,center=cv2.kmeans(Kvalues,K,None,criteria,10,cv2.KMEANS_PP_CENTERS)
+    criteria = (cv2.TERM_CRITERIA_MAX_ITER, 30, 1.0)
+    K = 6
+    ret,label,center=cv2.kmeans(Kvalues,K,None,criteria,3,cv2.KMEANS_PP_CENTERS)
     # Now convert back into uint8, and make original image
     center = np.uint8(center)
     #center = center[:,[2,3,4]]
@@ -297,6 +305,7 @@ while(True):
     distList = {}
     index =0;
     doors=[]
+    cornList = []
     contList = {}
     for i in range(0,K):
         tmp_cont = np.asarray(contors[i])
@@ -305,7 +314,6 @@ while(True):
             #cv2.drawContours(frame, [cnt], -1, (0,255,0), 1)
             x,y,w,h = cv2.boundingRect(cnt)
             box_temp = (x,y,w,h)
-            '''
             if isValidBox(box_temp):
                 dist = getDistancewithContour(cnt,box_temp,disparity)
                 if dist != inf:
@@ -313,9 +321,29 @@ while(True):
                     boxes[index] = box_temp
                     contList[index] = [cnt]
                     index+=1;
-            '''
             if isValidDoor(box_temp):
-                doors.append(box_temp);    
+                rect = cv2.minAreaRect(cnt)
+                box = cv2.boxPoints(rect)
+                cC=0
+                point = [[(box[1][0]+box[2][0])/2,(box[1][1]+box[2][1])/2]]
+                box = np.concatenate((box, point), axis=0)
+                point = [[(box[0][0]+box[3][0])/2,(box[0][1]+box[3][1])/2]]
+                box = np.concatenate((box, point), axis=0)
+                for index in range(len(box)):
+                    point = getValidPoints(box[index],30)
+                    #cv2.rectangle(frame,tuple(map(int,point[0])),tuple(map(int,point[1])),(0,255,0),2)
+                    haris = corner_return(frame[point[0][1]:point[1][1],point[0][0]:point[1][0]])
+                    if haris != None and len(haris)>0:
+                        cC+=1    
+                #box = np.int0(box)
+                #cv2.drawContours(frame,[box],0,(0,0,255),2)
+                if cC>=4:
+                    doors.append(box_temp);
+                #haris = corner_return(frame[y:y+h,x:x+w])
+                #for rs in haris:
+                #    x1,y1= rs.ravel()
+                #    cornList.append((x1+x,y1+y))
+                
     #for i in boxes.keys():
     #    if not isValidBox(boxes[i]):
     #        boxes.pop(i)
@@ -339,9 +367,14 @@ while(True):
     for door in doors:
         x,y,w,h = door
         cv2.rectangle(frame,(x,y),(x+w,y+h),(255,0,0),2)
+    for rs in cornList:
+        rs = map(int,rs)
+        x,y = rs
+        cv2.circle(frame,(x,y),5,127,-1)
     #frame = cv2.drawKeypoints(frame, kp, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
     cv2.imshow('frame',frame)
-    #cv2.imshow('disparity',disparity)
+    #print(set(disparity.flatten()))
+    cv2.imshow('disparity',disparity)
     '''
     # find and draw the keypoints
     kp = fast.detect(gray, None)
