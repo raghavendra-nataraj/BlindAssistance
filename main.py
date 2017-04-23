@@ -127,7 +127,7 @@ def nonMaxSup(lBoxes,tresh):
 
 def isValidDoor(box):
     x,y,w,h = box
-    if ((h>80) and (w>60 and w<200) and (h/float(w))>1 and (h/float(w))<3):
+    if ((h>80) and (w>100 and w<200) and (h/float(w))>1 and (h/float(w))<3):
         if calc_desc(frame,(x,y,w,h))>50:
             return True;
     return False;
@@ -287,7 +287,7 @@ while(True):
     #keypoints = detector.detect(frameRight)
     # define criteria, number of clusters(K) and apply kmeans()
     criteria = (cv2.TERM_CRITERIA_MAX_ITER, 30, 1.0)
-    K = 6
+    K = 5
     ret,label,center=cv2.kmeans(Kvalues,K,None,criteria,3,cv2.KMEANS_PP_CENTERS)
     # Now convert back into uint8, and make original image
     center = np.uint8(center)
