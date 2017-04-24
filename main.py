@@ -6,19 +6,87 @@ import imutils
 import sys
 import math
 
-def corner_return(image):        
-    image_cp = image.copy()
-    image=cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
-    #blr =cv2.bilateralFilter(image,9,40,75)
+def door_return(image):
+    gr=cv2.cvtColor(image,cv2.COLOR_BGR2GRAY) 
+    locs= cv2.goodFeaturesToTrack(gr,                    # img
+                                20,                      # maxCorners
+                                0.1,                     # qualityLevel
+                                20,                      # minDistance
+                                None,                    # corners, 
+                                None,                    # mask, 
+                                2,                       # blockSize, 
+                                useHarrisDetector=False, # useHarrisDetector, 
+                                k=0.04                   # k
+                                )
     
-    rs= cv2.goodFeaturesToTrack(image,20,0.1,20,None,None,2,useHarrisDetector=False,k=0.04)                                
-    #r,c,d= rs.shape
-    
-    #rs=np.int0(rs)
-    #cv2.circle(image,(229,400),20,250,-1)     
-                                
-    return rs    
+    for k in locs:
+        x,y= k.ravel()
+    blr = np.uint8(gr)
+    edges= cv2.Canny(blr,40,65,apertureSize = 3)
+    edges = cv2.dilate(edges,None, iterations=1)
+    edges = cv2.erode(edges,None, iterations=1)
+    cont = cv2.findContours(edges.copy(),cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
+    #_,c,hier = cv2.findContours(edges.copy(),cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
+    cont = cont[0] if imutils.is_cv2() else cont[1]
+    max_val=0
+    k=0
+    doors=[]
+    knobs=[]
+    for a in cont:
+       #a= cn[0]
+       #hie= cn[1]
+       #perm= k
+       #ch = hierarchyDataOfAContour[a]
+       counter=0
+       epsilon = 0.1*cv2.arcLength(a,True)
+       a = cv2.approxPolyDP(a,epsilon,True)
+       k=cv2.contourArea(a)
+       x,y,w,h = cv2.boundingRect(a)
+       #area= cv2.contourArea(a)
+       #Mid = cv2.moments(a)
+       #mx= int(Mid['m10']/Mid['m00'])
+       #my = int(M['m01']/M['m00'])
+       #counter =0
+       for i in range(len(locs)):
+           z= locs[i]
+           x1 = z[0,0]
+           y1 = z[0,1]
+           rat = (h/w)
+           
+           
+           if (x<=x1<=(x+w)) and (y<=y1<=(y+h)) and ((w/h)<0.8) and (2<rat<5) and (h>(2*w)):
+               counter+=1
+             
+       if (counter>max_val):
+            max_val=counter
+            #image_cp1=image.copy()
+            for i in range (len(locs)):
+                pnts= locs[i]
+                x2 = pnts[0,0]
+                y2= pnts[0,1]
+                
+                distanc = cv2.pointPolygonTest(a,(x2,y2),True)
+                
+                
+                if distanc>=0:
+                    E_dist = math.sqrt( (x2 - x1)**2 + (y2 - y1)**2 )
+                    
+                    if (h/3)<=E_dist<h:
+                        cv2.circle(ima,(x2,y2),20,127,thickness=1, lineType=8, shift=0)
+                        cv2.rectangle(image,(x,y),(x+w,y+h),(255,0,0),2)
+                        doors.append((x,y,w,h))
+                        knobs.append((x2,y2))
+                    #else:
+                        #cv2.rectangle(image,(x,y),(x+w,y+h),(255,0,0),2)
+                        
+                else:
+                    cv2.rectangle(frame,(x,y),(x+w,y+h),(255,0,0),2)
+                    doors.append((x,y,w,h))
+                    knobs.append(None)
+                    #cv2.circle(image,(x2,y2),10,127,thickness=1, lineType=8, shift=0)
+    return doors,knobs
 
+'''
 def ret_contours(image,locs):
     image_cp = image.copy()
     image=cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
@@ -35,11 +103,7 @@ def ret_contours(image,locs):
         m=0
         x,y,w,h = cv2.boundingRect(a)
     return (x,y,w,h)
-
-def findDoors(image):
-    imagewithcorners,corn_loc= corner_return(image)
-    cont1 =ret_contours(image,corn_loc)
-    return cont1
+'''
 
 def calc_desc(img,desc):
     x,y,w,h  = desc
@@ -126,39 +190,12 @@ def nonMaxSup(lBoxes,tresh):
     return lBoxes
 
 
-def isValidDoor(box,a):
+def isValidDoor(box):
     x,y,w,h = box
-    locs= corner_return(frame)
-    counter=0
-    max_val=0
-    #epsilon = 0.1*cv2.arcLength(box,True)
-    #a = cv2.approxPolyDP(a,epsilon,True)
-    #k=cv2.contourArea(a)
-    for i in range(len(locs)):
-           z= locs[i]
-           x1 = z[0,0]
-           y1 = z[0,1]
-           rat = (h/w)
-           
-           if (x<=x1<=(x+w)) and (y<=y1<=(y+h)) and ((w/h)<0.8) and (2<rat<5) and (h>(2*w)):
-               counter+=1
-    if (counter>max_val):
-            max_val=counter
-            #image_cp1=image.copy()
-            for i in range (len(locs)):
-                pnts= locs[i]
-                x2 = pnts[0,0]
-                y2= pnts[0,1]
-                
-                distanc = cv2.pointPolygonTest(a,(x2,y2),True)       
-                if distanc>=0:
-                    E_dist = math.sqrt( (x2 - x1)**2 + (y2 - y1)**2 )
-                    if (h/3)<=E_dist<h:
-                        return True,x2,y2;
-                                
-    
-    return False,0,0;
-
+    if ((h>150) and (w>100 and w<200) and (h/float(w))>1 and (h/float(w))<3):
+        if calc_desc(frame,(x,y,w,h))>50:
+            return True;
+    return False;
 
 def isValidBox(box):
     x,y,w,h = box
@@ -299,7 +336,7 @@ orb = cv2.ORB_create()
 
 while(True):
     ret,frameRight = cap.read()
-    frameRight = cv2.medianBlur(frameRight,9)
+    frameRight = cv2.GaussianBlur(frameRight,(5,5),0)
     frame = frameRight.copy()
     frameRight = cv2.cvtColor(frameRight,cv2.COLOR_BGR2GRAY)
     frameRight = cv2.equalizeHist(frameRight)
@@ -345,7 +382,7 @@ while(True):
     #keypoints = detector.detect(frameRight)
     # define criteria, number of clusters(K) and apply kmeans()
     criteria = (cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-    K = 3
+    K = 5
     ret,label,center=cv2.kmeans(Kvalues,K,None,criteria,3,cv2.KMEANS_PP_CENTERS)
     # Now convert back into uint8, and make original image
     center = np.uint8(center)
@@ -380,49 +417,34 @@ while(True):
                     boxes[index] = box_temp
                     contList[index] = [cnt]
                     index+=1;
-                    
-            epsilon = 0.1*cv2.arcLength(cnt,True)
-            cnt = cv2.approxPolyDP(cnt,epsilon,True)
-            x,y,w,h = cv2.boundingRect(cnt)
-            box_temp = (x,y,w,h)
-            
-            #k=cv2.contourArea(a)
-            boolC,z1,z2 = isValidDoor(box_temp,cnt)
-            
-            x1= []
-            y2= []
-            if boolC:
-                print "hello"
+            '''
+            if isValidDoor(box_temp):
                 rect = cv2.minAreaRect(cnt)
                 box = cv2.boxPoints(rect)
                 cC=0
-                point = [[(box[1][0]+box[2][0])/2,(box[1][1]+box[2][1])/2]]
-                box = np.concatenate((box, point), axis=0)
-                point = [[(box[0][0]+box[3][0])/2,(box[0][1]+box[3][1])/2]]
-                box = np.concatenate((box, point), axis=0)
+                #point = [[(box[1][0]+box[2][0])/2,(box[1][1]+box[2][1])/2]]
+                #box = np.concatenate((box, point), axis=0)
+                #point = [[(box[0][0]+box[3][0])/2,(box[0][1]+box[3][1])/2]]
+                #box = np.concatenate((box, point), axis=0)
                 for index in range(len(box)):
-                    point = getValidPoints(box[index],30)
-                    #cv2.rectangle(frame,tuple(map(int,point[0])),tuple(map(int,point[1])),(0,255,0),2)
+                    point = getValidPoints(box[index],10)
+                    cv2.rectangle(frame,tuple(map(int,point[0])),tuple(map(int,point[1])),(0,255,0),2)
                     haris = corner_return(frame[point[0][1]:point[1][1],point[0][0]:point[1][0]])
                     if haris != None and len(haris)>0:
                         cC+=1    
                 #box = np.int0(box)
                 #cv2.drawContours(frame,[box],0,(0,0,255),2)
                 if cC>=4:
-                    x1.append(z1)
-                    y2.append(z2)
                     doors.append(box_temp);
                     doorContor.append(cnt)
                 #haris = corner_return(frame[y:y+h,x:x+w])
                 #for rs in haris:
                 #    x1,y1= rs.ravel()
                 #    cornList.append((x1+x,y1+y))
-                
+            '''             
     #for i in boxes.keys():
     #    if not isValidBox(boxes[i]):
     #        boxes.pop(i)
-    
-                
     boxes = nonMaxSup(boxes,5)
     for i in boxes.keys():
         x,y,w,h = boxes[i]
@@ -433,20 +455,47 @@ while(True):
             dist = getDistancewithContour(contList[i],boxes[i],disparity)
         if(dist!=inf):
             cv2.putText(frame,str(int(dist)),(x+w/2,y+h/2),cv2.FONT_HERSHEY_PLAIN,4,(255,255,255))
+        #else:
+        #    if calc_desc(frame,(x,y,w,h))>10:
+        #        cv2.rectangle(frame,(x,y),(x+w,y+h),(255,0,0),2)
+        #epsilon = 0.1*cv2.arcLength(cnt,True)
+        #approx = cv2.approxPolyDP(cnt,epsilon,True)
+        #cv2.drawContours(frame, [cnt], -1, (0,255,0), 1)
+    #cv2.drawContours(frame, test_cont, -1, (0,255,0), 1)
+    doors,knobs = door_return(frame)
     for index in range(len(doors)):
         x,y,w,h = doors[index]
-        cv2.circle(frame,(x1[index],y2[index]),20,127,thickness=1, lineType=8, shift=0)
         cv2.rectangle(frame,(x,y),(x+w,y+h),(255,0,0),2)
+        if knobs[index]:
+            x2,y2 = knobs[index]
+            cv2.circle(frame,(x2,y2),20,127,thickness=1, lineType=8, shift=0)
+        '''
         status = isDoorOpen(doorContor[index],doors[index],disparity)
         if status:
             cv2.putText(frame,"Close",(x+w/2,y+h/2),cv2.FONT_HERSHEY_PLAIN,4,(255,255,255))
         else:
             cv2.putText(frame,"Open",(x+w/2,y+h/2),cv2.FONT_HERSHEY_PLAIN,4,(255,255,255))
+        '''
+    
+    #for rs in cornList:
+    #    rs = map(int,rs)
+    #    x,y = rs
+    #    cv2.circle(frame,(x,y),5,127,-1)
     #frame = cv2.drawKeypoints(frame, kp, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
     cv2.imshow('frame',frame)
     #print(set(disparity.flatten()))
     cv2.imshow('disparity',disparity)
+    '''
+    # find and draw the keypoints
+    kp = fast.detect(gray, None)
+    keypoints = detector.detect(gray)
+    print(keypoints)
+    im = cv2.drawKeypoints(frame, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+    cv2.imshow('frame',im)
+    '''
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
+
+    # When everything done, release the capture
 cap.release()
 cv2.destroyAllWindows()
