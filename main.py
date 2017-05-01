@@ -330,8 +330,8 @@ f = (leftInt[0][0] + leftInt[1][1] +  rightInt[0][0] + rightInt[1][1])/40.0
 b = 30
 
 bf = f*b
-fourcc = cv2.VideoWriter_fourcc(*'XVID')
-out = cv2.VideoWriter('output.avi',fourcc, 3, (640,480))
+#fourcc = cv2.VideoWriter_fourcc(*'XVID')
+#out = cv2.VideoWriter('output.avi',fourcc, 3, (640,480))
 cap = cv2.VideoCapture(1)
 cap.set(cv2.CAP_PROP_FPS,3);
 cap1 = cv2.VideoCapture(2)
@@ -358,10 +358,12 @@ while(True):
     frameRight = cv2.medianBlur(frameRight,5)
     frameRight = cv2.cvtColor(frameRight,cv2.COLOR_BGR2GRAY)
     frameRight = cv2.equalizeHist(frameRight)
+    #frameRight = cv2.undistort(frameRight, rightInt, rightExt, None,None)
     ret,frameLeft = cap1.read()
     frameLeft = cv2.medianBlur(frameLeft,5)
     frameLeft=cv2.cvtColor(frameLeft, cv2.COLOR_BGR2GRAY)
     frameLeft = cv2.equalizeHist(frameLeft)
+    #frameLeft = cv2.undistort(frameLeft, leftInt, leftExt, None, None)
     stereo = cv2.StereoSGBM_create(0, 64, 10, 600, 2400, 20, 16, 1,  100, 20,True)
     disparity = stereo.compute(frameRight,frameLeft,cv2.CV_32F)
     np.bitwise_not(disparity,disparity)
@@ -369,11 +371,11 @@ while(True):
 
     h,  w = frameRight.shape[:2]
     #newcameramtxRight, roi=cv2.getOptimalNewCameraMatrix(frameRight,rightExt,(w,h),1)
-    frameRight = cv2.undistort(frameRight, rightInt, rightExt, None,None)
+    
 
     h,  w = frameLeft.shape[:2]
         #newcameramtxLeft, roi=cv2.getOptimalNewCameraMatrix(frame1,leftExt,(w,h),1,(w,h))
-    frameLeft = cv2.undistort(frameLeft, leftInt, leftExt, None, None)
+
 
 
     #stereo = cv2.StereoSGBM(0, 96, 5, 600, 2400, 20, 16, 1,  100, 20,True)
@@ -502,7 +504,6 @@ while(True):
     im = cv2.drawKeypoints(frame, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
     cv2.imshow('frame',im)
     '''
-    out.write(frame)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
