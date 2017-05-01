@@ -17,6 +17,9 @@ How to execute:
 1)Door open/close with obstacle detection
 
 $python main.py <door/obs>
+door-> door detection
+obs -> Obstacle detection
+
     Eg. $python main.py door
 	
 2)Door and knob detection

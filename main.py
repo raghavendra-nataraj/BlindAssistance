@@ -315,6 +315,11 @@ def getDistancewithContour(cnts,box,disp):
     
 isObsChk = False
 isDoorChk = False
+print len(sys.argv)
+if len(sys.argv)==1:
+    print "Not enough arguments"
+    print "Usage python main.py <door/obs>"
+    sys.exit(1)
 if sys.argv[1]=="obs":
     isObsChk = True
 
@@ -508,6 +513,5 @@ while(True):
         break
 
     # When everything done, release the capture
-out.release()
 cap.release()
 cv2.destroyAllWindows()
