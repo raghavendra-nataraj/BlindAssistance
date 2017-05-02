@@ -30,3 +30,6 @@ $python Doorwithknob.py
 
 $python outdoor_detect_doors.py
 
+
+Note:
+A video demo of the project is available in the repository.(vision_final.mp4)
